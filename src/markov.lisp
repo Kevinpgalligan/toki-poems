@@ -1,3 +1,5 @@
+(in-package toki)
+
 (defparameter +end-states+ (list "?" "!" "." 'end))
 (defparameter +punctuation-chars+
   (list #\! #\. #\" #\( #\)

@@ -12,13 +12,10 @@ import re
 
 import praw
 
-#######################################
-# Just copying these from the Twitter #
-# script. Sorry.                      #
-#######################################
 URL_REG = re.compile(r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)")
 # It's difficult to handle brackets and quotes.
-# It tends to make output look ugly without complicated handling.
+# They tend to make output look ugly without complicated handling.
+# So just remove them.
 STRUCTURES_REG = re.compile(r"“.+”|\".+\"|\(.+\)|\[.+\]")
 REDDIT_SHIT_REG = re.compile(r" [ru]/[^ ]+")
 

@@ -16,10 +16,22 @@
 	"supa" "suwi" "tan" "taso" "tawa" "telo" "tenpo" "toki" "tomo"
 	"tu" "unpa" "uta" "utala" "walo" "wan" "waso" "wawa" "weka" "wile"))
 
+(defun toki-word-p (word)
+  (member word *toki-words* :test 'equalp))
+
+(defun count-syllables (word)
+  ;; Due to the way toki pona was designed, the number
+  ;; of syllables is the number of groups of vowels.
+  (length
+   (cl-ppcre:all-matches-as-strings "[aeiou]+" word)))
+
 (defun rhyme-suffix (word)
   (if (< (length word) 3)
       word
       (cl-ppcre:scan-to-strings "([aeiou]+[^aeiou]+[aeiou]+$)|([aeiou]+[^aeiou]+$)" word)))
+
+(defun rhymes-p (w1 w2)
+  (string= (rhyme-suffix w1) (rhyme-suffix w2)))
 
 (defparameter *rhyme-map* (make-hash-table :test 'equalp))
 
@@ -32,10 +44,82 @@
 		    (setf (gethash cmp-word *rhyme-map*)
 			  (cons word (gethash cmp-word *rhyme-map*))))))
 
-(defun rhymes-p (w1 w2)
-  (string= (rhyme-suffix w1) (rhyme-suffix w2)))
 
-(defparameter *toki-chain*)
+(defparameter *toki-chain*
+  (create-chain "/home/kg/proyectos/toki-poems/corpus.txt"))
+
+;; Remove anything that's not a word in toki pona, or a
+;; special state (start & end).
+(loop for word being the hash-keys of *toki-chain*
+      do (flet ((keep-p (v)
+		  (or (eq 'start v)
+		      (eq 'end v)
+		      (toki-word-p v))))
+	   (if (keep-p word)
+	       (setf (gethash word *toki-chain*)
+		     (remove-if-not (lambda (transition)
+				      (keep-p (car transition)))
+				    (gethash word *toki-chain*)))
+	       (remhash word *toki-chain*))))
+
+(defun generate-toki-pona ()
+  (generate *toki-chain*))
+
+(defun generate-poem (raw-structure)
+  (let* ((stanzas (parse-poem-structure raw-structure))
+	 (n-stanzas (length stanzas))
+	 (end-table (make-line-end-table)))
+    (with-output-to-string (s)
+      (loop for stanza in stanzas
+	    for stanza-i = 1 then (1+ stanza-i)
+	    do (let* ((lines (stanza-lines stanza))
+		      (n-lines (length lines)))
+		 (loop for line in lines
+		       for line-i = 1 then (1+ line-i)
+		       do (write-line s line end-table)
+		       do (format s (if (= line-i n-lines) "." ",~%"))))
+	    do (format s (if (= stanza-i n-stanzas) "" "~%~%"))))))
+
+(defun write-line (stream line end-table)
+  (let ((words (gen-words line end-table)))
+    (when (not (line-end-table-contains-p end-table))
+      (put-line-end-table table (line-label line) (last words)))
+    (write-string (format nil "~{~a~^ ~}" words) stream)))
+
+;; 1. recursively generate each line.
+;; 2. keep adding new words until syllable
+;;    count is correct for line.
+;; 3. if there's already a word for this
+;;    line's label, make sure we match it.
+;; 4. if not, then accept the word we just
+;;    landed on, as long as it has at least
+;;    one match. Oh, and I guess it shouldn't
+;;    match any other label.
+(defun gen-words (line end-table)
+  (labels ((rec (syllables label target-syllables)
+	     (cond
+	       ((> syllables target-syllables) nil)
+	       ((= syllables target-syllables)
+		;; TODO
+		))))
+    (rec 0 (line-label line) (line-syllables line))))
+
+(defun make-line-end-table ()
+  (make-hash-table :test 'equalp))
+
+(defun line-end-table-contains-p (table label)
+  (gethash label table))
+
+(defun put-line-end-table (table label word)
+  (setf (gethash label table) (rhyme-suffix word)))
+
+(defun matches-other-lines (table label word)
+  (let ((other-end (gethash label table)))
+    (or (not other-end)
+	(string= other-end (rhyme-suffix word)))))
+
+(defun copy-list (list)
+  (loop for x in list collect x))
 
 (defun parse-poem-structure (s)
   ;; Returns a list of stanzas.
