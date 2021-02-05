@@ -1,12 +1,4 @@
-;; TODO:
-;; 0. [DONE] rhyme table.
-;; 1. [DONE] download corpus from reddit.
-;; 2. markov chain w/ only toki pona words.
-;; 3. generate poems.
-;;    -> DFS through the markov chain, probabilistic shuffle.
-;;    -> stop when syllables correct & it rhymes.
-
-(ql:quickload 'cl-ppcre)
+(in-package toki)
 
 (defparameter *toki-words*
   (list "a" "akesi" "ala" "alasa" "ale" "ali" "anpa" "ante" "anu"
@@ -43,15 +35,7 @@
 (defun rhymes-p (w1 w2)
   (string= (rhyme-suffix w1) (rhyme-suffix w2)))
 
-(defun skip-whitespace (s i)
-  (loop while (and (< i (length s))
-		   (is-whitespace-p (char s i)))
-	do (incf i))
-  i)
-
-(defun is-whitespace-p (c)
-  (member c (list #\Space #\Backspace #\Tab #\Linefeed
-		  #\Page #\Return #\Rubout #\Newline)))
+(defparameter *toki-chain*)
 
 (defun parse-poem-structure (s)
   ;; Returns a list of stanzas.
@@ -74,6 +58,16 @@
 	       (char= (char s i) #\/))
       (incf i))
     (values (make-stanza lines) i)))
+
+(defun skip-whitespace (s i)
+  (loop while (and (< i (length s))
+		   (is-whitespace-p (char s i)))
+	do (incf i))
+  i)
+
+(defun is-whitespace-p (c)
+  (member c (list #\Space #\Backspace #\Tab #\Linefeed
+		  #\Page #\Return #\Rubout #\Newline)))
 
 (defun make-stanza (lines) lines)
 (defun stanza-lines (stanza) stanza)

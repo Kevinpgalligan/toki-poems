@@ -1,0 +1,2 @@
+(defpackage :toki
+  (:use :cl))
