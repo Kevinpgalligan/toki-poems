@@ -45,7 +45,7 @@
 			  (cons word (gethash cmp-word *rhyme-map*))))))
 
 (defun make-toki-chain (path)
-  "Generates a Markov chain of toki pona words, based
+  "Creates a Markov chain of toki pona words, based
 on a text file."
   (let ((chain (create-chain path)))
     ;; Remove anything that's not a word in toki pona, or
@@ -97,20 +97,16 @@ has 3 syllables, the second line has 5 syllables, etc."
 	       (cond
 		 ((> syllables target-syllables) nil)
 		 ((= syllables target-syllables)
-		  (if (matches-other-lines end-table label curr-word)
-		      (list curr-word)
-		      nil))
+		  (values nil (matches-other-lines end-table label curr-word)))
 		 (t
 		  (loop for word in (weighted-shuffle
-				      (get-transitions chain curr-word))
-			do (let ((result
-				   ;; Only pick the next state if it's a word.
-				   ;; That excludes the 'end state.
-				   (and (stringp word)
-					(rec word
-					     (+ syllables (count-syllables word))))))
-			     (when result
-			       (return (cons word result)))))))))
+				     (get-transitions chain curr-word))
+			;; Excludes the 'end state.
+			do (when (stringp word)
+			     (multiple-value-bind (result success)
+				 (rec word (+ syllables (count-syllables word)))
+			       (when success
+				 (return (values (cons word result) t))))))))))
       (rec 'start 0))))
 
 (defun weighted-shuffle (transitions)
