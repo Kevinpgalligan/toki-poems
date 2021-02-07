@@ -44,28 +44,32 @@
 		    (setf (gethash cmp-word *rhyme-map*)
 			  (cons word (gethash cmp-word *rhyme-map*))))))
 
+(defun make-toki-chain (path)
+  "Generates a Markov chain of toki pona words, based
+on a text file."
+  (let ((chain (create-chain path)))
+    ;; Remove anything that's not a word in toki pona, or
+    ;; a special state (start or end).
+    (loop for word being the hash-keys of chain
+	  do (flet ((keep-p (v)
+		      (or (eq 'start v)
+			  (eq 'end v)
+			  (toki-word-p v))))
+	       (if (keep-p word)
+		   (setf (gethash word chain)
+			 (remove-if-not (lambda (transition)
+					  (keep-p (car transition)))
+					(gethash word chain)))
+		   (remhash word chain))))
+    chain))
 
-(defparameter *toki-chain*
-  (create-chain "/home/kg/proyectos/toki-poems/corpus.txt"))
-
-;; Remove anything that's not a word in toki pona, or a
-;; special state (start & end).
-(loop for word being the hash-keys of *toki-chain*
-      do (flet ((keep-p (v)
-		  (or (eq 'start v)
-		      (eq 'end v)
-		      (toki-word-p v))))
-	   (if (keep-p word)
-	       (setf (gethash word *toki-chain*)
-		     (remove-if-not (lambda (transition)
-				      (keep-p (car transition)))
-				    (gethash word *toki-chain*)))
-	       (remhash word *toki-chain*))))
-
-(defun generate-toki-pona ()
-  (generate *toki-chain*))
-
-(defun generate-poem (raw-structure)
+(defun generate-poem (chain raw-structure)
+  "CHAIN is a Markov chain of toki pona words.
+RAW-STRUCTURE is a string that describes the structure of the poem.
+Example structure: 3A 5B 3A / 5C
+That's 2 stanzas, the first has 3 lines and the second has 1.
+The 1st and 3rd lines rhyme in the first stanza. The first line
+has 3 syllables, the second line has 5 syllables, etc."
   (let* ((stanzas (parse-poem-structure raw-structure))
 	 (n-stanzas (length stanzas))
 	 (end-table (make-line-end-table)))
@@ -76,33 +80,61 @@
 		      (n-lines (length lines)))
 		 (loop for line in lines
 		       for line-i = 1 then (1+ line-i)
-		       do (write-line s line end-table)
+		       do (write-poem-line s chain line end-table)
 		       do (format s (if (= line-i n-lines) "." ",~%"))))
 	    do (format s (if (= stanza-i n-stanzas) "" "~%~%"))))))
 
-(defun write-line (stream line end-table)
-  (let ((words (gen-words line end-table)))
-    (when (not (line-end-table-contains-p end-table))
-      (put-line-end-table table (line-label line) (last words)))
-    (write-string (format nil "~{~a~^ ~}" words) stream)))
+(defun write-poem-line (stream chain line end-table)
+  (let ((words (gen-words chain line end-table)))
+    (when (not (line-end-table-contains-p end-table (line-label line)))
+      (put-line-end-table end-table (line-label line) (car (last words))))
+    (format stream "~{~a~^ ~}" words)))
 
-;; 1. recursively generate each line.
-;; 2. keep adding new words until syllable
-;;    count is correct for line.
-;; 3. if there's already a word for this
-;;    line's label, make sure we match it.
-;; 4. if not, then accept the word we just
-;;    landed on, as long as it has at least
-;;    one match. Oh, and I guess it shouldn't
-;;    match any other label.
-(defun gen-words (line end-table)
-  (labels ((rec (syllables label target-syllables)
-	     (cond
-	       ((> syllables target-syllables) nil)
-	       ((= syllables target-syllables)
-		;; TODO
-		))))
-    (rec 0 (line-label line) (line-syllables line))))
+(defun gen-words (chain line end-table)
+  (let ((label (line-label line))
+	(target-syllables (line-syllables line)))
+    (labels ((rec (curr-word syllables)
+	       (cond
+		 ((> syllables target-syllables) nil)
+		 ((= syllables target-syllables)
+		  (if (matches-other-lines end-table label curr-word)
+		      (list curr-word)
+		      nil))
+		 (t
+		  (loop for word in (weighted-shuffle
+				      (get-transitions chain curr-word))
+			do (let ((result
+				   ;; Only pick the next state if it's a word.
+				   ;; That excludes the 'end state.
+				   (and (stringp word)
+					(rec word
+					     (+ syllables (count-syllables word))))))
+			     (when result
+			       (return (cons word result)))))))))
+      (rec 'start 0))))
+
+(defun weighted-shuffle (transitions)
+  (let ((shuffled (copy-list transitions))
+	(total-weight (loop for (state . count) in transitions
+			    sum count)))
+      (labels ((rec (remaining-weight list)
+		 (when (not (null (cdr list)))
+		   (let* ((i (random remaining-weight)))
+		     (rotatef (car list)
+			      (car (drop-until-cumulative-weight i list)))
+		     ;; All this cdar-ing and rotatef-ing is kinda ugly.
+		     (rec (- remaining-weight (cdar list))
+			  (cdr list))))))
+	(rec total-weight shuffled))
+    (loop for (state . count) in shuffled
+	  collect state)))
+
+(defun drop-until-cumulative-weight (i list)
+  (let ((cumulative 0))
+    (loop do (incf cumulative (cdar list))
+	  while (<= cumulative i)
+	  do (setf list (cdr list)))
+    list))
 
 (defun make-line-end-table ()
   (make-hash-table :test 'equalp))
@@ -117,9 +149,6 @@
   (let ((other-end (gethash label table)))
     (or (not other-end)
 	(string= other-end (rhyme-suffix word)))))
-
-(defun copy-list (list)
-  (loop for x in list collect x))
 
 (defun parse-poem-structure (s)
   ;; Returns a list of stanzas.
