@@ -4,7 +4,7 @@ Generate poems in the toki pona language!
 [Write-up here](https://kevingal.com/blog/toki-poetry.html).
 
 ## Installation
-Requires: a Common Lisp implementation, quicklisp (the de-facto package manager for Common Lisp). [Portacle](https://portacle.github.io/) is the quickest way to get started.
+Requires: 1) a Common Lisp implementation, and 2) quicklisp (the de-facto package manager for Common Lisp). If you don't have either of those things, then [Portacle](https://portacle.github.io/) is the quickest way to get started.
 
 Clone the repo into your quicklisp local-projects folder. Then, from a REPL, run `(ql:quickload 'toki)`.
 
