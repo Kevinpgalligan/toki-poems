@@ -4,7 +4,7 @@ Generate poems in the toki pona language!
 [Write-up here](https://kevingal.com/blog/toki-poetry.html).
 
 ## Installation
-Requires: Common Lisp, quicklisp (the de-facto package manager for Common Lisp).
+Requires: a Common Lisp implementation, quicklisp (the de-facto package manager for Common Lisp). [Portacle](https://portacle.github.io/) is the quickest way to get started.
 
 Clone the repo into your quicklisp local-projects folder. Then, from a REPL, run `(ql:quickload 'toki)`.
 
@@ -19,7 +19,7 @@ $ pip3 install praw # the only dependency
 $ python3 redscrape.py tokipona <client-id> <client-secret> <useragent> --path <path-to-output-file>
 ```
 
-Now have a corpus of toki pona text that you can use to generate poems. Within your Common Lisp REPL:
+Now you have a corpus of toki pona text that you can use to generate poems. Within your Common Lisp REPL:
 
 ```lisp
 CL-USER> (ql:quickload 'toki)
