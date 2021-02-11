@@ -23,7 +23,7 @@ Now you have a corpus of toki pona text that you can use to generate poems. With
 
 ```lisp
 CL-USER> (ql:quickload 'toki)
-TOKI> (in-package toki)
+CL-USER> (in-package toki)
 TOKI> (defparameter ch (make-toki-chain "/path/to/corpus.txt"))
 TOKI> (generate-poem ch "5A 7B 5A / 5B")
 "pilin e ni tan,
