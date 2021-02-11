@@ -27,17 +27,14 @@ def main():
     parser.add_argument("clientsecret")
     parser.add_argument("useragent")
     parser.add_argument("--num-comments", default=5000, type=int)
-    parser.add_argument("--path", required=False)
+    parser.add_argument("--path", required=True)
     args = parser.parse_args()
 
     reddit = praw.Reddit(
         client_id=args.clientid,
         client_secret=args.clientsecret,
         user_agent=args.useragent)
-    if args.path:
-        path = os.path.join(args.path, args.subreddit)
-    else:
-        path = args.subreddit
+    path = args.path
 
     with open(path, "w") as f:
         for i, comment in enumerate(generate_comments(reddit.subreddit(args.subreddit))):
