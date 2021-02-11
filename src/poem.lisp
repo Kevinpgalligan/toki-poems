@@ -44,6 +44,9 @@
 		    (setf (gethash cmp-word *rhyme-map*)
 			  (cons word (gethash cmp-word *rhyme-map*))))))
 
+(defun num-rhymes (word)
+  (length (gethash word *rhyme-map*)))
+
 (defun make-toki-chain (path)
   "Creates a Markov chain of toki pona words, based
 on a text file."
@@ -102,29 +105,24 @@ has 3 syllables, the second line has 5 syllables, etc."
       (put-line-end-table end-table (line-label line) (car (last words))))
     (format stream "~{~a~^ ~}" words)))
 
-(defun gen-words (chain line end-table label-counts allow-repeats))
+(defun gen-words (chain line end-table label-counts allow-repeats)
   (let ((label (line-label line))
 	(target-syllables (line-syllables line)))
     (labels ((rec (curr-word syllables)
-	       (cond
-		 ((> syllables target-syllables) nil)
-		 ((= syllables target-syllables)
-		  (values nil (if allow-repeats
-				  ;; TODO
-				  ;; Might need to change end table to contain
-				  ;; full word.
-				  (matches-other-lines end-table label curr-word)
-				  ())))
-		 (t
-		  (loop for word in (weighted-shuffle
-				     (get-transitions chain curr-word))
-			;; Excludes the 'end state.
-			do (when (stringp word)
-			     (multiple-value-bind (result success)
-				 (rec word (+ syllables (count-syllables word)))
-			       (when success
-				 (return (values (cons word result) t))))))))))
-      (rec 'start 0))))
+		  (cond
+		   ((> syllables target-syllables) nil)
+		   ((= syllables target-syllables)
+		    (values nil (suitable-end-p end-table label curr-word label-counts allow-repeats)))
+		   (t
+		    (loop for word in (weighted-shuffle
+				       (get-transitions chain curr-word))
+			  ;; Excludes the 'end state.
+			  do (when (stringp word)
+			       (multiple-value-bind (result success)
+						    (rec word (+ syllables (count-syllables word)))
+						    (when success
+						      (return (values (cons word result) t))))))))))
+	    (rec 'start 0))))
 
 (defun weighted-shuffle (transitions)
   (let ((shuffled (copy-list transitions))
@@ -156,12 +154,22 @@ has 3 syllables, the second line has 5 syllables, etc."
   (gethash label table))
 
 (defun put-line-end-table (table label word)
-  (setf (gethash label table) (rhyme-suffix word)))
+  (setf (gethash label table) (cons word (gethash label table))))
 
-(defun matches-other-lines (table label word)
-  (let ((other-end (gethash label table)))
-    (or (not other-end)
-	(string= other-end (rhyme-suffix word)))))
+(defun suitable-end-p (table label word label-counts repeats-allowed)
+  (let ((other-ends (gethash label table)))
+    (and (or (not other-ends)
+	     (string= (rhyme-suffix (car other-ends)) (rhyme-suffix word)))
+	 (or repeats-allowed
+	     ;; If repeats aren't allowed, make sure that this word
+	     ;; isn't a repeat of other words that have been used to
+	     ;; end lines with this label.
+	     ;; Also make sure that the word has sufficiently many rhymes
+	     ;; to end all the lines with this label.
+	     (and
+	      (loop for end in other-ends
+		    never (string= end word))
+	      (>= (num-rhymes word) (gethash label label-counts)))))))
 
 (defun parse-poem-structure (s)
   ;; Returns a list of stanzas.
