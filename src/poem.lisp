@@ -81,12 +81,14 @@ has 3 syllables, the second line has 5 syllables, etc."
       (loop for stanza in stanzas
 	    for stanza-i = 1 then (1+ stanza-i)
 	    do (let* ((lines (stanza-lines stanza))
-		      (n-lines (length lines)))
+		      (n-lines (length lines))
+		      (start-word nil))
 		 (loop for line in lines
 		       for line-i = 1 then (1+ line-i)
-		       ;; Well ain't that a lot of arguments.
-		       do (write-poem-line
-			   s chain line end-table label-counts allow-repeats)
+		       do (setf start-word
+				;; Well ain't that a lot of arguments.
+				(write-poem-line
+				 s chain line start-word end-table label-counts allow-repeats))
 		       do (format s (if (= line-i n-lines) "." ",~%"))))
 	    do (format s (if (= stanza-i n-stanzas) "" "~%~%"))))))
 
@@ -99,13 +101,15 @@ has 3 syllables, the second line has 5 syllables, etc."
 			      (1+ (or (gethash label counts) 0))))))
     counts))
 
-(defun write-poem-line (stream chain line end-table label-counts allow-repeats)
-  (let ((words (gen-words chain line end-table label-counts allow-repeats)))
+(defun write-poem-line (stream chain line start-word end-table label-counts allow-repeats)
+  ;; Writes words to a stream and returns the last one.
+  (let ((words (gen-words chain line start-word end-table label-counts allow-repeats)))
     (when (not (line-end-table-contains-p end-table (line-label line)))
       (put-line-end-table end-table (line-label line) (car (last words))))
-    (format stream "~{~a~^ ~}" words)))
+    (format stream "~{~a~^ ~}" words)
+    (car (last words))))
 
-(defun gen-words (chain line end-table label-counts allow-repeats)
+(defun gen-words (chain line start-word end-table label-counts allow-repeats)
   (let ((label (line-label line))
 	(target-syllables (line-syllables line)))
     (labels ((rec (curr-word syllables)
@@ -122,7 +126,7 @@ has 3 syllables, the second line has 5 syllables, etc."
 						    (rec word (+ syllables (count-syllables word)))
 						    (when success
 						      (return (values (cons word result) t))))))))))
-	    (rec 'start 0))))
+      (rec (or start-word 'start) 0))))
 
 (defun weighted-shuffle (transitions)
   (let ((shuffled (copy-list transitions))
