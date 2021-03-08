@@ -1,6 +1,12 @@
 ## Description
 Generate poems in the toki pona language!
 
+> jan sama pi jan,  
+> ike li pona ala,  
+> tawa mi la tan.  
+>  
+> tenpo ni e kala.
+
 [Write-up here](https://kevingal.com/blog/toki-poetry.html).
 
 ## Installation
