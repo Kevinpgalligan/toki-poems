@@ -17,7 +17,7 @@
 	"tu" "unpa" "uta" "utala" "walo" "wan" "waso" "wawa" "weka" "wile"))
 
 (defun toki-word-p (word)
-  (member word *toki-words* :test 'equalp))
+  (member word *toki-words* :test 'string=))
 
 (defun count-syllables (word)
   ;; Due to the way toki pona was designed, the number
@@ -67,30 +67,71 @@ on a text file."
     chain))
 
 (defun generate-poem (chain raw-structure &key allow-repeats)
-  "CHAIN is a Markov chain of toki pona words.
+  "Returns random toki pona poem as a string.
+CHAIN is a Markov chain of toki pona words.
 RAW-STRUCTURE is a string that describes the structure of the poem.
 Example structure: 3A 5B 3A / 5C
 That's 2 stanzas, the first has 3 lines and the second has 1.
 The 1st and 3rd lines rhyme in the first stanza. The first line
 has 3 syllables, the second line has 5 syllables, etc."
-  (let* ((stanzas (parse-poem-structure raw-structure))
-	 (label-counts (make-label-counts stanzas))
-	 (n-stanzas (length stanzas))
+  (let* ((stanza-specs (parse-poem-structure raw-structure))
+	 (label-counts (make-label-counts stanza-specs))
 	 (end-table (make-line-end-table)))
-    (with-output-to-string (s)
-      (loop for stanza in stanzas
-	    for stanza-i = 1 then (1+ stanza-i)
-	    do (let* ((lines (stanza-lines stanza))
-		      (n-lines (length lines))
-		      (start-word nil))
-		 (loop for line in lines
-		       for line-i = 1 then (1+ line-i)
-		       do (setf start-word
-				;; Well ain't that a lot of arguments.
-				(write-poem-line
-				 s chain line start-word end-table label-counts allow-repeats))
-		       do (format s (if (= line-i n-lines) "." ",~%"))))
-	    do (format s (if (= stanza-i n-stanzas) "" "~%~%"))))))
+    (format nil
+	    "~{~a~^~%~%~}"
+	    (loop for stanza-spec in stanza-specs
+		  collect (multiple-value-bind (stanza new-end-table)
+			      (generate-stanza chain stanza-spec label-counts end-table allow-repeats)
+			    (setf end-table new-end-table)
+			    (stanza->string stanza))))))
+
+(defun generate-stanza (chain stanza-spec label-counts end-table allow-repeats)
+  (loop do (multiple-value-bind (stanza new-end-table)
+	       (try-generate-stanza chain stanza-spec label-counts end-table allow-repeats)
+	     (when stanza
+	       (return (values stanza new-end-table))))))
+
+(defun try-generate-stanza (chain stanza-spec label-counts end-table allow-repeats)
+  (handler-case
+      (let ((start-word nil))
+	(let ((stanza
+		(loop for line-spec in (stanza-lines stanza-spec)
+		      collect (multiple-value-bind (line new-end-table)
+				  (generate-line chain line-spec start-word label-counts end-table allow-repeats)
+				(when (not line)
+				  ;; Failed to generate the line, we've hit
+				  ;; a dead end.
+				  (error 'dead-end))
+				(setf end-table new-end-table)
+				(setf start-word (line-final-word line))
+				line))))
+	  (values stanza end-table)))
+    (dead-end ()
+      ;; If we hit a dead end while generating
+      ;; a line, just return nothing and let the
+      ;; calling function handle it. It should
+      ;; make multiple attempts.
+      nil)))
+
+(defun line-final-word (line)
+  (car (last line)))
+
+(defun generate-line (chain line-spec start-word label-counts end-table allow-repeats)
+  (let ((words (gen-words chain line-spec start-word label-counts end-table allow-repeats)))
+    (values words
+	    (adjoin-end-table end-table (line-label line-spec) (line-final-word words)))))
+
+(defun stanza->string (stanza)
+  ;; A stanza is a list of lines.
+  ;; All lines end with a comma and a newline
+  ;; character, except the last one, which ends
+  ;; with a period.
+  (format nil "~{~a~^,~%~}." (mapcar #'line->string stanza)))
+
+(defun line->string (line)
+  (format nil "~{~a~^ ~}" line))
+
+(define-condition dead-end (error) ())
 
 (defun make-label-counts (stanzas)
   (let ((counts (make-hash-table :test #'equalp)))
@@ -101,31 +142,23 @@ has 3 syllables, the second line has 5 syllables, etc."
 			      (1+ (or (gethash label counts) 0))))))
     counts))
 
-(defun write-poem-line (stream chain line start-word end-table label-counts allow-repeats)
-  ;; Writes words to a stream and returns the last one.
-  (let ((words (gen-words chain line start-word end-table label-counts allow-repeats)))
-    (when (not (line-end-table-contains-p end-table (line-label line)))
-      (put-line-end-table end-table (line-label line) (car (last words))))
-    (format stream "~{~a~^ ~}" words)
-    (car (last words))))
-
-(defun gen-words (chain line start-word end-table label-counts allow-repeats)
+(defun gen-words (chain line start-word label-counts end-table allow-repeats)
   (let ((label (line-label line))
 	(target-syllables (line-syllables line)))
     (labels ((rec (curr-word syllables)
-		  (cond
-		   ((> syllables target-syllables) nil)
-		   ((= syllables target-syllables)
-		    (values nil (suitable-end-p end-table label curr-word label-counts allow-repeats)))
-		   (t
-		    (loop for word in (weighted-shuffle
-				       (get-transitions chain curr-word))
-			  ;; Excludes the 'end state.
-			  do (when (stringp word)
-			       (multiple-value-bind (result success)
-						    (rec word (+ syllables (count-syllables word)))
-						    (when success
-						      (return (values (cons word result) t))))))))))
+	       (cond
+		 ((> syllables target-syllables) nil)
+		 ((= syllables target-syllables)
+		  (values nil (suitable-end-p end-table label curr-word label-counts allow-repeats)))
+		 (t
+		  (loop for word in (weighted-shuffle
+				     (get-transitions chain curr-word))
+			;; Excludes the 'end state.
+			do (when (stringp word)
+			     (multiple-value-bind (result success)
+				 (rec word (+ syllables (count-syllables word)))
+			       (when success
+				 (return (values (cons word result) t))))))))))
       (rec (or start-word 'start) 0))))
 
 (defun weighted-shuffle (transitions)
@@ -152,16 +185,24 @@ has 3 syllables, the second line has 5 syllables, etc."
     list))
 
 (defun make-line-end-table ()
-  (make-hash-table :test 'equalp))
+  (list))
 
-(defun line-end-table-contains-p (table label)
-  (gethash label table))
+(defun end-table-get (table label)
+  (cadr (assoc label table :test 'string=)))
 
-(defun put-line-end-table (table label word)
-  (setf (gethash label table) (cons word (gethash label table))))
+(defun adjoin-end-table (table label word)
+  (let* ((old-words (end-table-get table label))
+	 (new-words (cons word old-words))
+	 (new-entry (list label new-words)))
+    (if old-words
+	(loop for entry in table
+	      collect (if (string= (car entry) label)
+			  new-entry
+			  entry))
+	(cons new-entry table))))
 
 (defun suitable-end-p (table label word label-counts repeats-allowed)
-  (let ((other-ends (gethash label table)))
+  (let ((other-ends (end-table-get table label)))
     (and (or (not other-ends)
 	     (string= (rhyme-suffix (car other-ends)) (rhyme-suffix word)))
 	 (or repeats-allowed
