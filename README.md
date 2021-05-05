@@ -1,5 +1,5 @@
 ## Description
-Generate poems in the toki pona language!
+Generate poems in the toki pona language! Now exists as a [Twitter bot](https://twitter.com/PonaBot).
 
 > jan sama pi jan,  
 > ike li pona ala,  
@@ -38,3 +38,9 @@ ni la mi o jan.
 
 mi la mi lon tan."
 ```
+
+## Bot Setup
+1. Make sure you have a corpus, save as corpus.txt in the base directory.
+2. Decrypt credentials in creds.txt.gpg (be careful not to commit them in plaintext). Ideally, create a separate user for the bot and make sure that only that user has access to creds.txt.
+3. Copy systemd config files in systemd-config/ to the appropriate directory.
+4. Kick off the systemd service.

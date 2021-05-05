@@ -1,70 +1,84 @@
 (defparameter dependencies
   (list 'chirp
-	'toki))
+	'toki
+	'local-time))
 
 (loop for dep in dependencies
       do (ql:quickload dep))
 
-(in-package toki)
+;;;; Make sure credentials are there and set 'em.
+(with-open-file (file "creds.txt" :direction :input)
+  (let ((creds (read file)))
+    (setf chirp:*oauth-api-key* (getf creds :api-key)
+	  chirp:*oauth-api-secret* (getf creds :api-secret)
+	  chirp:*oauth-access-token* (getf creds :access-token)
+	  chirp:*oauth-access-secret* (getf creds :access-secret))))
+(chirp:account/verify-credentials)
 
+
+;;;; Utilities and constants around tweeting.
 (defparameter *tweet-limit* 280)
+(defparameter *user-id* "PonaBot")
+(defparameter *tweet-period-seconds* (* 60 60 24))
+(defparameter *cooloff-time* (* 60 20))
+(defvar *last-tweet-timestamp*)
+
+(defun send-tweet (text)
+  (if (> (chirp:compute-status-length text) *tweet-limit*)
+      (error (format nil "Tweet ~a too long" text))
+      (chirp:statuses/update text)))
+
+(defun get-last-tweet-timestamp ()
+  "Returns timestamp of the bot's last tweet, in seconds."
+  (when (not *last-tweet-timestamp*)
+    (setf *last-tweet-timestamp*
+	  (apply #'max
+		 (mapcar (lambda (status)
+			   ;; Indirect dependency on local-time library, woops.
+			   (local-time:timestamp-to-universal (chirp:created-at status)))
+			 (chirp:statuses/user-timeline :user-id *user-id*)))))
+  *last-tweet-timestamp*)
+
+(defun get-next-tweet-timestamp ()
+  (+ *tweet-period-seconds* (get-last-tweet-timestamp)))
+
+(defun log-info (message)
+  (write-log "INFO" message))
+
+(defun log-error (message)
+  (write-log "ERROR" message))
+
+(defun write-log (type-prefix message)
+  (format t "~a [~a] ~a" (local-time:format-timestring nil (local-time:now)) type-prefix message))
+
+
+;;;; Set up poem generation stuff. Requires a corpus.
 (defparameter *poem-structures*
   (list "5A 7B 5C" ; haiku
 	"11A 11A / 6B 6B 11A" ; limerick
 	"10A 10B 10A 10B / 10G 10G" ; shortened sonnet (fits within tweet)
 	"5A 7B 5A / 5B" ; something I made up
 	))
-(defparameter *chain* (make-toki-chain "corpus.txt"))
-(defparameter *tweet-period-seconds* (* 60 60 24))
-(defparameter *last-attempt-seconds* 0)
-
-(chirp:initiate-authentication
- :api-key "D1pMCK17gI10bQ6orBPS0w"
- :api-secret "CBw2ugt9LIfInXV12b3itq7zsu7t8duYWcH2GsvdUDvR9mS3HE")
-
-
-
-(defun send-tweet (text)
-  (when (< *tweet-limit* (length text))
-    (error (format nil "Tweet ~a too long" text)))
-  ;; TODO actually send it
-  )
-
-(defun get-last-tweet-timestamp ()
-  "Returns timestmap of the bot's last tweet, in seconds."
-  ;; TODO
-  )
-
-(defun seconds-til-next-tweet ()
-  (max
-   0
-   (- (+ (max *last-attempt-seconds*
-	      (get-last-tweet-timestamp))
-	 *tweet-period-seconds*)
-      (current-time-seconds))))
+(defparameter *chain* (toki:make-toki-chain "corpus.txt"))
 
 (defun random-poem-structure ()
   (setf *random-state* (make-random-state t))
   (nth (random (length *poem-structures*)) *poem-structures*))
 
-(defun log-info (message &rest fmt-args)
-  ;; TODO
-  )
 
-(defun log-error (message &rest fmt-args)
-  ;; TODO
-  )
-
+;;;; Finally, start the main loop.
 (loop repeat
       (handler-case
-	  (unwind-protect
-	       (let ((seconds-remaining (seconds-til-next-tweet)))
-		 (if (zerop seconds-remaining)
-		     (let ((text (generate-poem *chain* (random-poem-structure))))
-		       (send-tweet text)
-		       (log-info "Sent tweet ~a" text))
-		     (progn (sleep seconds-remaining)
-			    (log-info "Sleeping ~a seconds until next tweet." seconds-remaining))))
-	    (setf *last-attempt-seconds* (current-time-seconds)))
+	  (let ((next-tweet-timestamp (get-next-tweet-timestamp))
+		(current-time (get-universal-time)))
+	    (if (> current-time next-tweet-timestamp)
+		(let ((text (generate-poem *chain* (random-poem-structure))))
+		  (send-tweet text)
+		  (setf *last-tweet-timestamp* current-time)
+		  (log-info (format nil "Sent tweet: '~a'" text)))
+		(progn (log-info "Not due to tweet yet, sleeping.")
+		       (sleep (- next-tweet-timestamp current-time)))))
 	(error (condition)
-	  (log-error (message condition)))))
+	  (log-error (message condition))
+	  (log-info "Cooling off.")
+	  (sleep *cooloff-time*)))
