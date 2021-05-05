@@ -7,6 +7,7 @@
       do (ql:quickload dep))
 
 ;;;; Make sure credentials are there and set 'em.
+(setf *default-pathname-defaults* (truename (sb-posix:getcwd)))
 (with-open-file (file "creds.txt" :direction :input)
   (let ((creds (read file)))
     (setf chirp:*oauth-api-key* (getf creds :api-key)
@@ -16,12 +17,14 @@
 (chirp:account/verify-credentials)
 
 
+(in-package toki)
+
 ;;;; Utilities and constants around tweeting.
 (defparameter *tweet-limit* 280)
 (defparameter *user-id* "PonaBot")
 (defparameter *tweet-period-seconds* (* 60 60 24))
 (defparameter *cooloff-time* (* 60 20))
-(defvar *last-tweet-timestamp*)
+(defparameter *last-tweet-timestamp* nil)
 
 (defun send-tweet (text)
   (if (> (chirp:compute-status-length text) *tweet-limit*)
@@ -59,7 +62,7 @@
 	"10A 10B 10A 10B / 10G 10G" ; shortened sonnet (fits within tweet)
 	"5A 7B 5A / 5B" ; something I made up
 	))
-(defparameter *chain* (toki:make-toki-chain "corpus.txt"))
+(defparameter *chain* (make-toki-chain "corpus.txt"))
 
 (defun random-poem-structure ()
   (setf *random-state* (make-random-state t))
@@ -79,6 +82,6 @@
 		(progn (log-info "Not due to tweet yet, sleeping.")
 		       (sleep (- next-tweet-timestamp current-time)))))
 	(error (condition)
-	  (log-error (message condition))
+	  (log-error (format nil "Encountered an error! ~S" condition))
 	  (log-info "Cooling off.")
-	  (sleep *cooloff-time*)))
+	  (sleep *cooloff-time*))))

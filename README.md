@@ -40,7 +40,10 @@ mi la mi lon tan."
 ```
 
 ## Bot Setup
+For my own reference.
+
+0. You should already have SBCL and quicklisp.
 1. Make sure you have a corpus, save as corpus.txt in the base directory.
-2. Decrypt credentials in creds.txt.gpg (be careful not to commit them in plaintext). Ideally, create a separate user for the bot and make sure that only that user has access to creds.txt.
-3. Copy systemd config files in systemd-config/ to the appropriate directory.
-4. Kick off the systemd service.
+2. Decrypt credentials in creds.txt.gpg (be careful not to commit them in plaintext).
+3. Copy tokibot.system to /etc/systemd/system/.
+4. Kick off the systemd service: `sudo systemctl enable tokibot` and `sudo systemctl start tokibot`
