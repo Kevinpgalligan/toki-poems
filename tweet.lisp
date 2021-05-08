@@ -43,7 +43,7 @@
   (write-log "ERROR" message))
 
 (defun write-log (type-prefix message)
-  (format t "~a [~a] ~a" (local-time:format-timestring nil (local-time:now)) type-prefix message))
+  (format t "~a [~a] ~a~%" (local-time:format-timestring nil (local-time:now)) type-prefix message))
 
 
 (defparameter *poem-structures*
