@@ -2,3 +2,4 @@ corpus.txt
 api-keys.txt
 creds.txt
 *.fasl
+tweet.log

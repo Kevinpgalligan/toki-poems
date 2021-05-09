@@ -1,13 +1,11 @@
 ## Description
-Generate poems in the toki pona language! Now exists as a [Twitter bot](https://twitter.com/PonaBot).
+Generate poems in the toki pona language! Now exists as a [Twitter bot](https://twitter.com/PonaBot). [Write-up here](https://kevingal.com/blog/toki-poetry.html).
 
 > jan sama pi jan,  
 > ike li pona ala,  
 > tawa mi la tan.  
 >  
 > tenpo ni e kala.
-
-[Write-up here](https://kevingal.com/blog/toki-poetry.html).
 
 ## Installation
 Requires: 1) a Common Lisp implementation, and 2) quicklisp (the de-facto package manager for Common Lisp). If you don't have either of those things, then [Portacle](https://portacle.github.io/) is the quickest way to get started.
@@ -40,10 +38,10 @@ mi la mi lon tan."
 ```
 
 ## Bot Setup
-For my own reference.
+Send tweets using the tweet.lisp script, which requires SBCL and quicklisp to be installed. It relies on the working directory being the same as the directory where the script is stored. It assumes that certain files (the corpus & credentials) are available in the same directory. And it assumes that '.sbclrc' is in the home directory. But such things should be straightforward to tweak.
 
-0. You should already have SBCL and quicklisp.
-1. Make sure you have a corpus, save as corpus.txt in the base directory.
-2. Decrypt credentials in creds.txt.gpg (be careful not to commit them in plaintext).
-3. Copy tokibot.system to /etc/systemd/system/.
-4. Kick off the systemd service: `sudo systemctl enable tokibot` and `sudo systemctl start tokibot`
+Finally, here's the crontab entry that runs the bot once per day at 4pm:
+
+```
+0 16 * * * cd ~/proyectos/toki-poems/ && ./tweet.lisp >>tweet.log
+```
