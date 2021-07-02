@@ -32,8 +32,8 @@
 (defparameter *tweet-limit* 280)
 
 (defun send-tweet (text)
-  (if (> (chirp:compute-status-length text) *tweet-limit*)
-      (error (format nil "Tweet ~a too long" text))
+  (if (> (length text) *tweet-limit*)
+      (error (format nil "Tweet '~a' too long" text))
       (chirp:statuses/update text)))
 
 (defun log-info (message)
@@ -59,9 +59,6 @@
   (nth (random (length *poem-structures*)) *poem-structures*))
 
 
-(handler-case
-    (let ((text (generate-poem *chain* (random-poem-structure))))
-      (send-tweet text)
-      (log-info (format nil "Sent tweet: '~a'" text)))
-  (error (condition)
-    (log-error (format nil "Encountered an error! ~S" condition))))
+(let ((text (generate-poem *chain* (random-poem-structure))))
+  (send-tweet text)
+  (log-info (format nil "Sent tweet: '~a'" text)))
